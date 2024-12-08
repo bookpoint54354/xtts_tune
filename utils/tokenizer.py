@@ -11,6 +11,7 @@ from num2words import num2words
 from spacy.lang.ar import Arabic
 from spacy.lang.en import English
 from spacy.lang.es import Spanish
+from spacy.lang.hi import Hindi
 from spacy.lang.ja import Japanese
 from spacy.lang.zh import Chinese
 from tokenizers import Tokenizer
@@ -27,6 +28,8 @@ def get_spacy_lang(lang):
         return Arabic()
     elif lang == "es":
         return Spanish()
+    elif lang == "hi":
+        return Hindi()
     else:
         # For most languages, Enlish does the job
         return English()
@@ -229,17 +232,10 @@ _abbreviations = {
             # Korean doesn't typically use abbreviations in the same way as Latin-based scripts.
         ]
     ],
-    "ja": [
-        (re.compile("\\b%s\\b" % x[0]), x[1])
+    "hi": [
+        (re.compile("\\b%s\\." % x[0], re.IGNORECASE), x[1])
         for x in [
-            ("氏", "さん"),  # Mr.
-            ("夫人", "おんなのひと"),  # Mrs.
-            ("博士", "はかせ"),  # Doctor or PhD
-            ("株", "株式会社"),  # Corporation
-            ("有", "有限会社"),  # Limited company
-            ("大学", "だいがく"),   # University
-            ("先生", "せんせい"),   # Teacher/Professor/Master
-            ("君", "くん")   # Used at the end of boys' names to express familiarity or affection.
+            # Hindi doesn't typically use abbreviations in the same way as Latin-based scripts.
         ]
     ],
 }
@@ -438,17 +434,17 @@ _symbols_multilingual = {
             ("°", " 도 "),
         ]
     ],
-    "ja": [
-        (re.compile(r"%s" % re.escape(x[0])), x[1])
+    "hi": [
+        (re.compile(r"%s" % re.escape(x[0]), re.IGNORECASE), x[1])
         for x in [
-            ("&", " と "),
-            ("@", " アットマーク "),
-            ("%", " パーセント "),
-            ("#", " ナンバー "),
-            ("$", " ドル "),
-            ("£", " ポンド "),
-            ("°", " 度"),
-            ]
+            ("&", " और "),
+            ("@", " ऐट दी रेट "),
+            ("%", " प्रतिशत "),
+            ("#", " हैश "),
+            ("$", " डॉलर "),
+            ("£", " पाउंड "),
+            ("°", " डिग्री "),
+        ]
     ],
 }
 
@@ -475,7 +471,7 @@ _ordinal_re = {
     "tr": re.compile(r"([0-9]+)(\.|inci|nci|uncu|üncü|\.)"),
     "hu": re.compile(r"([0-9]+)(\.|adik|edik|odik|edik|ödik|ödike|ik)"),
     "ko": re.compile(r"([0-9]+)(번째|번|차|째)"),
-    "ja": re.compile(r"([0-9]+)(番|回|つ|目|等|位)")
+        "hi": re.compile(r"([0-9]+)(st|nd|rd|th)") # To check
 }
 _number_re = re.compile(r"[0-9]+")
 _currency_re = {
@@ -500,6 +496,9 @@ def _remove_dots(m):
     text = m.group(0)
     if "." in text:
         text = text.replace(".", "")
+    # For Hindi
+    elif "।" in text:
+        text = text.replace("।", "")
     return text
 
 
@@ -527,6 +526,7 @@ def _expand_currency(m, lang="en", currency="USD"):
         "tr": ", ",
         "hu": ", ",
         "ko": ", ",
+        "hi": ", ",
     }
 
     if amount.is_integer():
@@ -637,6 +637,7 @@ class VoiceBpeTokenizer:
             "ja": 71,
             "hu": 224,
             "ko": 95,
+            "hi": 150,
         }
 
     @cached_property
@@ -654,7 +655,7 @@ class VoiceBpeTokenizer:
             )
 
     def preprocess_text(self, txt, lang):
-        if lang in {"ar", "cs", "de", "en", "es", "fr", "hu", "it", "nl", "pl", "pt", "ru", "tr", "zh", "ko"}:
+        if lang in {"ar", "cs", "de", "en", "es", "fr", "hu", "it", "nl", "pl", "pt", "ru", "tr", "zh", "ko", "hi"}:
             txt = multilingual_cleaners(txt, lang)
             if lang == "zh":
                 txt = chinese_transliterate(txt)
@@ -787,6 +788,9 @@ def test_expand_numbers_multilingual():
         ("12.5 초 안에.", "십이 점 다섯 초 안에.", "ko"),
         ("50 명의 병사가 있었다.", "오십 명의 병사가 있었다.", "ko"),
         ("이것은 1 번째 테스트입니다", "이것은 첫 번째 테스트입니다", "ko"),
+        # Hindi
+        ("12.5 सेकंड में।", "साढ़े बारह सेकंड में।", "hi"),
+        ("50 सैनिक थे।", "पचास सैनिक थे।", "hi"),
     ]
     for a, b, lang in test_cases:
         out = expand_numbers_multilingual(a, lang=lang)
@@ -856,6 +860,7 @@ def test_symbols_multilingual():
         ("Pilim %14 dolu.", "Pilim yüzde 14 dolu.", "tr"),
         ("Az akkumulátorom töltöttsége 14%", "Az akkumulátorom töltöttsége 14 százalék", "hu"),
         ("배터리 잔량이 14%입니다.", "배터리 잔량이 14 퍼센트입니다.", "ko"),
+        ("मेरे पास 14% बैटरी है।", "मेरे पास चौदह प्रतिशत बैटरी है।",  "hi"),
     ]
 
     for a, b, lang in test_cases:
